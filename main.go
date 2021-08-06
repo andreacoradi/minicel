@@ -31,9 +31,25 @@ const (
 
 type Table [][]Cell
 
-var debugFlag = flag.Bool("debug", false, "enable intermediate representation and other debug infos")
+type Dir int
+
+const (
+	Up Dir = iota + 1
+	Right
+	Down
+	Left
+)
+
+var charToDir = map[byte]Dir{
+	'^': Up,
+	'>': Right,
+	'v': Down,
+	'<': Left,
+}
+
+var debugFlag = flag.Bool("dbg", false, "enable intermediate representation and other debug infos")
 var prettyPrintFlag = flag.Bool("pp", false, "pretty prints the cells with padding in-between")
-var numberFormatVar = flag.String("format", "%.2f", "printf-like formatting for floating point numbers inside cells")
+var numberFormatVar = flag.String("fmt", "%.2f", "printf-like formatting for floating point numbers inside cells")
 
 func init() {
 	flag.Parse()
