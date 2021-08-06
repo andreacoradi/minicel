@@ -50,53 +50,7 @@ func main() {
 
 	// Calculate size
 	content := strings.TrimSpace(string(c))
-	size := len(strings.Split(content, "\n"))
-
-	if *debugFlag {
-		fmt.Println("Rows:", size)
-	}
-
-	table := make(Table, size)
-	for i, row := range strings.Split(content, "\n") {
-		parts := strings.Split(row, "|")
-		for _, p := range parts {
-			part := strings.TrimSpace(p)
-
-			// FIXME: Find a way to eliminate empty cell rows or columns
-			var t CellType
-
-			if strings.HasPrefix(part, "=") {
-				t = Expression
-			} else if strings.HasPrefix(part, ":") {
-				t = Clone
-			} else if value, err := strconv.ParseFloat(part, 64); err == nil {
-				t = Number
-				part = fmt.Sprintf(*numberFormatVar, value)
-			} else if matched, _ := regexp.MatchString(`[A-Z]`, part); matched {
-				t = Text
-			}
-
-			table[i] = append(table[i], Cell{
-				Content: part,
-				Type:    t,
-			})
-		}
-	}
-
-	type Dir int
-	const (
-		Up Dir = iota + 1
-		Right
-		Down
-		Left
-	)
-
-	charToDir := map[byte]Dir{
-		'^': Up,
-		'>': Right,
-		'v': Down,
-		'<': Left,
-	}
+	table := parseTable(content)
 
 	// Resolve cloning
 	for i, row := range table {
@@ -142,7 +96,7 @@ func main() {
 							if (letter < 'A' && inc < 0) || (letter > 'Z' && inc > 0) {
 								log.Panic("Out of bounds")
 							}
-							letter = uint8(int(letter) + inc)
+							letter += byte(inc)
 						}
 
 						targetCell.Content = strings.ReplaceAll(targetCell.Content, m, fmt.Sprintf("%s%d", string(letter), number))
@@ -181,6 +135,43 @@ func main() {
 	}
 
 	dumpTable(table)
+}
+
+func parseTable(content string) Table {
+	size := len(strings.Split(content, "\n"))
+
+	if *debugFlag {
+		fmt.Println("Rows:", size)
+	}
+
+	table := make(Table, size)
+	for i, row := range strings.Split(content, "\n") {
+		parts := strings.Split(row, "|")
+		for _, p := range parts {
+			part := strings.TrimSpace(p)
+
+			// FIXME: Find a way to eliminate empty cell rows or columns
+			var t CellType
+
+			if strings.HasPrefix(part, "=") {
+				t = Expression
+			} else if strings.HasPrefix(part, ":") {
+				t = Clone
+			} else if value, err := strconv.ParseFloat(part, 64); err == nil {
+				t = Number
+				part = fmt.Sprintf(*numberFormatVar, value)
+			} else if matched, _ := regexp.MatchString(`[A-Z]`, part); matched {
+				t = Text
+			}
+
+			table[i] = append(table[i], Cell{
+				Content: part,
+				Type:    t,
+			})
+		}
+	}
+
+	return table
 }
 
 func parseExpr(table Table, expr ast.Expr) float64 {
@@ -235,7 +226,7 @@ func dumpTable(table Table) {
 	}
 
 	if *debugFlag {
-		fmt.Println("Widths:", widths)
+		fmt.Println("Column widths:", widths)
 	}
 
 	// Render table
@@ -244,6 +235,7 @@ func dumpTable(table Table) {
 			fmt.Print(cell.Content)
 			if j < len(row)-1 {
 				fmt.Print(strings.Repeat(" ", widths[j]-len(cell.Content)))
+
 				if *prettyPrintFlag {
 					fmt.Print(" | ")
 				} else {
