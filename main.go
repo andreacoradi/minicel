@@ -30,6 +30,7 @@ const (
 )
 
 var debugFlag = flag.Bool("debug", false, "enable intermediate representation and other debug infos")
+var numberFormatVar = flag.String("format", "%.2f", "printf-like formatting for floating point numbers inside cells")
 
 func init() {
 	flag.Parse()
@@ -65,10 +66,10 @@ func main() {
 				t = Expression
 			} else if strings.HasPrefix(part, ":") {
 				t = Clone
-			} else if matched, _ := regexp.MatchString(`\d`, part); matched {
+			} else if value, err := strconv.ParseFloat(part, 64); err == nil {
 				t = Number
-				// FIXME: Parse numbers in another way, to format them as floats
-			} else if matched, _ = regexp.MatchString(`[A-Z]`, part); matched {
+				part = fmt.Sprintf(*numberFormatVar, value)
+			} else if matched, _ := regexp.MatchString(`[A-Z]`, part); matched {
 				t = Text
 			}
 
@@ -167,7 +168,7 @@ func main() {
 				value := parseExpr(matrix, expr)
 
 				matrix[i][j] = Cell{
-					Content: fmt.Sprintf("%.6f", value),
+					Content: fmt.Sprintf(*numberFormatVar, value),
 					Type:    Number,
 				}
 			case Clone:
