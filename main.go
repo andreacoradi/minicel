@@ -29,8 +29,27 @@ const (
 	Clone
 )
 
-var debugFlag = flag.Bool("debug", false, "enable intermediate representation and other debug infos")
-var numberFormatVar = flag.String("format", "%.2f", "printf-like formatting for floating point numbers inside cells")
+type Table [][]Cell
+
+type Dir int
+
+const (
+	Up Dir = iota + 1
+	Right
+	Down
+	Left
+)
+
+var charToDir = map[byte]Dir{
+	'^': Up,
+	'>': Right,
+	'v': Down,
+	'<': Left,
+}
+
+var debugFlag = flag.Bool("dbg", false, "enable intermediate representation and other debug infos")
+var prettyPrintFlag = flag.Bool("pp", false, "pretty prints the cells with padding in-between")
+var numberFormatVar = flag.String("fmt", "%.2f", "printf-like formatting for floating point numbers inside cells")
 
 func init() {
 	flag.Parse()
@@ -38,22 +57,110 @@ func init() {
 
 func main() {
 	if len(flag.Args()) < 1 {
-		log.Fatalln("Not enough arguments")
+		log.Panic("Not enough arguments")
 	}
 	c, err := ioutil.ReadFile(flag.Arg(0))
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	// Calculate size
 	content := strings.TrimSpace(string(c))
+	table := parseTable(content)
+
+	// Resolve cloning
+	for i, row := range table {
+		for j, cell := range row {
+			switch cell.Type {
+			case Clone:
+				var targetCell Cell
+				dir := charToDir[cell.Content[1]]
+				incNumber := false
+				var inc int
+				if dir == Up || dir == Down {
+					incNumber = true
+				}
+				switch dir {
+				case Up:
+					targetCell = table[i-1][j]
+					inc = 1
+				case Right:
+					targetCell = table[i][j+1]
+					inc = -1
+				case Down:
+					targetCell = table[i+1][j]
+					inc = -1
+				case Left:
+					targetCell = table[i][j-1]
+					inc = 1
+				}
+
+				if targetCell.Type == Expression {
+					r, _ := regexp.Compile(`[A-Z]\d+`)
+					matches := r.FindAllString(targetCell.Content, -1)
+
+					for _, m := range matches {
+						letter := m[0]
+						number, err := strconv.Atoi(m[1:])
+						if err != nil {
+							log.Panic(err)
+						}
+
+						if incNumber {
+							number += inc
+						} else {
+							if (letter < 'A' && inc < 0) || (letter > 'Z' && inc > 0) {
+								log.Panic("Out of bounds")
+							}
+							letter += byte(inc)
+						}
+
+						targetCell.Content = strings.ReplaceAll(targetCell.Content, m, fmt.Sprintf("%s%d", string(letter), number))
+					}
+				}
+				table[i][j] = targetCell
+			}
+		}
+	}
+
+	if *debugFlag {
+		dumpTable(table)
+		fmt.Println(strings.Repeat("-", 80))
+	}
+
+	// Final evaluation
+	for i, row := range table {
+		for j, cell := range row {
+			switch cell.Type {
+			case Expression:
+				expr, err := parser.ParseExpr(cell.Content[1:])
+				if err != nil {
+					log.Panic(err)
+				}
+
+				value := parseExpr(table, expr)
+
+				table[i][j] = Cell{
+					Content: fmt.Sprintf(*numberFormatVar, value),
+					Type:    Number,
+				}
+			case Clone:
+				log.Panic("There should be no Clones after initial evaluation")
+			}
+		}
+	}
+
+	dumpTable(table)
+}
+
+func parseTable(content string) Table {
 	size := len(strings.Split(content, "\n"))
 
 	if *debugFlag {
 		fmt.Println("Rows:", size)
 	}
 
-	matrix := make([][]Cell, size)
+	table := make(Table, size)
 	for i, row := range strings.Split(content, "\n") {
 		parts := strings.Split(row, "|")
 		for _, p := range parts {
@@ -73,125 +180,32 @@ func main() {
 				t = Text
 			}
 
-			matrix[i] = append(matrix[i], Cell{
+			table[i] = append(table[i], Cell{
 				Content: part,
 				Type:    t,
 			})
 		}
 	}
 
-	type Dir int
-	const (
-		Up Dir = iota + 1
-		Right
-		Down
-		Left
-	)
-
-	charToDir := map[byte]Dir{
-		'^': Up,
-		'>': Right,
-		'v': Down,
-		'<': Left,
-	}
-
-	// Resolve cloning
-	for i, row := range matrix {
-		for j, cell := range row {
-			switch cell.Type {
-			case Clone:
-				var targetCell Cell
-				dir := charToDir[cell.Content[1]]
-				incNumber := false
-				var inc int
-				if dir == Up || dir == Down {
-					incNumber = true
-				}
-				switch dir {
-				case Up:
-					targetCell = matrix[i-1][j]
-					inc = 1
-				case Right:
-					targetCell = matrix[i][j+1]
-					inc = -1
-				case Down:
-					targetCell = matrix[i+1][j]
-					inc = -1
-				case Left:
-					targetCell = matrix[i][j-1]
-					inc = 1
-				}
-
-				if targetCell.Type == Expression {
-					r, _ := regexp.Compile(`[A-Z]\d+`)
-					matches := r.FindAllString(targetCell.Content, -1)
-
-					for _, m := range matches {
-						letter := m[0]
-						number, err := strconv.Atoi(m[1:])
-						if err != nil {
-							panic(err)
-						}
-
-						if incNumber {
-							number += inc
-						} else {
-							if (letter < 'A' && inc < 0) || (letter > 'Z' && inc > 0) {
-								panic("Out of bounds")
-							}
-							letter = uint8(int(letter) + inc)
-						}
-
-						targetCell.Content = strings.ReplaceAll(targetCell.Content, m, fmt.Sprintf("%s%d", string(letter), number))
-					}
-				}
-				matrix[i][j] = targetCell
-			}
-		}
-	}
-
-	if *debugFlag {
-		dumpTable(matrix)
-		fmt.Println(strings.Repeat("-", 80))
-	}
-
-	// Final evaluation
-	for i, row := range matrix {
-		for j, cell := range row {
-			switch cell.Type {
-			case Expression:
-				expr, err := parser.ParseExpr(cell.Content[1:])
-				if err != nil {
-					panic(err)
-				}
-
-				value := parseExpr(matrix, expr)
-
-				matrix[i][j] = Cell{
-					Content: fmt.Sprintf(*numberFormatVar, value),
-					Type:    Number,
-				}
-			case Clone:
-				log.Fatalln("There should be no Clones after initial evaluation")
-			}
-		}
-	}
-
-	dumpTable(matrix)
+	return table
 }
 
-func parseExpr(matrix [][]Cell, expr ast.Expr) float64 {
+func parseExpr(table Table, expr ast.Expr) float64 {
 	if ident, ok := expr.(*ast.Ident); ok {
-		cell := getCell(matrix, ident)
+		cell, err := getCell(table, ident)
+		if err != nil {
+			log.Panic(err)
+		}
+
 		if cell.Type == Text {
-			panic("Text cell should not be used inside expressions")
+			log.Panic("Text cell should not be used inside expressions")
 		}
 		return parseNumber(cell.Content)
 	}
 
 	if binaryExpr, ok := expr.(*ast.BinaryExpr); ok {
-		lhs := parseExpr(matrix, binaryExpr.X)
-		rhs := parseExpr(matrix, binaryExpr.Y)
+		lhs := parseExpr(table, binaryExpr.X)
+		rhs := parseExpr(table, binaryExpr.Y)
 
 		switch binaryExpr.Op {
 		case token.ADD:
@@ -209,10 +223,11 @@ func parseExpr(matrix [][]Cell, expr ast.Expr) float64 {
 		return parseNumber(number.Value)
 	}
 
+	log.Panic("couldn't parse expr")
 	return -1
 }
 
-func dumpTable(table [][]Cell) {
+func dumpTable(table Table) {
 	// Estimate column widths
 	widths := make([]int, len(table[0]))
 	for j := 0; j < len(table[0]); j++ {
@@ -227,42 +242,46 @@ func dumpTable(table [][]Cell) {
 	}
 
 	if *debugFlag {
-		fmt.Println("Widths:", widths)
+		fmt.Println("Column widths:", widths)
 	}
 
 	// Render table
-	// FIXME: Do some sort of pretty printing
 	for _, row := range table {
 		for j, cell := range row {
 			fmt.Print(cell.Content)
 			if j < len(row)-1 {
 				fmt.Print(strings.Repeat(" ", widths[j]-len(cell.Content)))
-				fmt.Print("|")
+
+				if *prettyPrintFlag {
+					fmt.Print(" | ")
+				} else {
+					fmt.Print("|")
+				}
 			}
 		}
 		fmt.Println()
 	}
 }
 
-func getCell(matrix [][]Cell, ident *ast.Ident) Cell {
+func getCell(table Table, ident *ast.Ident) (Cell, error) {
 	letter := ident.Name[0]
 	number, err := strconv.Atoi(ident.Name[1:])
 	if err != nil {
-		panic(err)
+		return Cell{}, err
 	}
 
 	if (letter-'A') < 0 || number < 0 {
-		panic("Invalid cell identifier '" + ident.Name + "'")
+		return Cell{}, fmt.Errorf("invalid cell identifier %q", ident.Name)
 	}
 
-	cell := matrix[number][letter-'A']
-	return cell
+	cell := table[number][letter-'A']
+	return cell, nil
 }
 
 func parseNumber(s string) float64 {
 	value, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	return value
 }
