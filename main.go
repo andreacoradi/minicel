@@ -29,6 +29,8 @@ const (
 	Clone
 )
 
+type Table [][]Cell
+
 var debugFlag = flag.Bool("debug", false, "enable intermediate representation and other debug infos")
 var prettyPrintFlag = flag.Bool("pp", false, "pretty prints the cells with padding in-between")
 var numberFormatVar = flag.String("format", "%.2f", "printf-like formatting for floating point numbers inside cells")
@@ -54,7 +56,7 @@ func main() {
 		fmt.Println("Rows:", size)
 	}
 
-	matrix := make([][]Cell, size)
+	table := make(Table, size)
 	for i, row := range strings.Split(content, "\n") {
 		parts := strings.Split(row, "|")
 		for _, p := range parts {
@@ -74,7 +76,7 @@ func main() {
 				t = Text
 			}
 
-			matrix[i] = append(matrix[i], Cell{
+			table[i] = append(table[i], Cell{
 				Content: part,
 				Type:    t,
 			})
@@ -97,7 +99,7 @@ func main() {
 	}
 
 	// Resolve cloning
-	for i, row := range matrix {
+	for i, row := range table {
 		for j, cell := range row {
 			switch cell.Type {
 			case Clone:
@@ -110,16 +112,16 @@ func main() {
 				}
 				switch dir {
 				case Up:
-					targetCell = matrix[i-1][j]
+					targetCell = table[i-1][j]
 					inc = 1
 				case Right:
-					targetCell = matrix[i][j+1]
+					targetCell = table[i][j+1]
 					inc = -1
 				case Down:
-					targetCell = matrix[i+1][j]
+					targetCell = table[i+1][j]
 					inc = -1
 				case Left:
-					targetCell = matrix[i][j-1]
+					targetCell = table[i][j-1]
 					inc = 1
 				}
 
@@ -146,18 +148,18 @@ func main() {
 						targetCell.Content = strings.ReplaceAll(targetCell.Content, m, fmt.Sprintf("%s%d", string(letter), number))
 					}
 				}
-				matrix[i][j] = targetCell
+				table[i][j] = targetCell
 			}
 		}
 	}
 
 	if *debugFlag {
-		dumpTable(matrix)
+		dumpTable(table)
 		fmt.Println(strings.Repeat("-", 80))
 	}
 
 	// Final evaluation
-	for i, row := range matrix {
+	for i, row := range table {
 		for j, cell := range row {
 			switch cell.Type {
 			case Expression:
@@ -166,9 +168,9 @@ func main() {
 					panic(err)
 				}
 
-				value := parseExpr(matrix, expr)
+				value := parseExpr(table, expr)
 
-				matrix[i][j] = Cell{
+				table[i][j] = Cell{
 					Content: fmt.Sprintf(*numberFormatVar, value),
 					Type:    Number,
 				}
@@ -178,12 +180,12 @@ func main() {
 		}
 	}
 
-	dumpTable(matrix)
+	dumpTable(table)
 }
 
-func parseExpr(matrix [][]Cell, expr ast.Expr) float64 {
+func parseExpr(table Table, expr ast.Expr) float64 {
 	if ident, ok := expr.(*ast.Ident); ok {
-		cell := getCell(matrix, ident)
+		cell := getCell(table, ident)
 		if cell.Type == Text {
 			panic("Text cell should not be used inside expressions")
 		}
@@ -191,8 +193,8 @@ func parseExpr(matrix [][]Cell, expr ast.Expr) float64 {
 	}
 
 	if binaryExpr, ok := expr.(*ast.BinaryExpr); ok {
-		lhs := parseExpr(matrix, binaryExpr.X)
-		rhs := parseExpr(matrix, binaryExpr.Y)
+		lhs := parseExpr(table, binaryExpr.X)
+		rhs := parseExpr(table, binaryExpr.Y)
 
 		switch binaryExpr.Op {
 		case token.ADD:
@@ -213,7 +215,7 @@ func parseExpr(matrix [][]Cell, expr ast.Expr) float64 {
 	return -1
 }
 
-func dumpTable(table [][]Cell) {
+func dumpTable(table Table) {
 	// Estimate column widths
 	widths := make([]int, len(table[0]))
 	for j := 0; j < len(table[0]); j++ {
@@ -248,7 +250,7 @@ func dumpTable(table [][]Cell) {
 	}
 }
 
-func getCell(matrix [][]Cell, ident *ast.Ident) Cell {
+func getCell(table Table, ident *ast.Ident) Cell {
 	letter := ident.Name[0]
 	number, err := strconv.Atoi(ident.Name[1:])
 	if err != nil {
@@ -259,7 +261,7 @@ func getCell(matrix [][]Cell, ident *ast.Ident) Cell {
 		panic("Invalid cell identifier '" + ident.Name + "'")
 	}
 
-	cell := matrix[number][letter-'A']
+	cell := table[number][letter-'A']
 	return cell
 }
 
