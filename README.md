@@ -33,10 +33,10 @@ $ ./minicel csv/sum.csv
 
 | Type       | Description                                                                                                        | Examples                          |
 | ---        | ---                                                                                                                | ---                               |
-    | Text       | Just a human readable text.                                                                                       | `A`, `Test`, `Total Amount`, etc                |
-| Number     | Anything that can be parsed as a float by [strconv.ParseFloat](https://pkg.go.dev/strconv#ParseFloat)                                                                | `1`, `2.0`, `1e-6`, etc           |
+| Text       | Just a human readable text.                                                                                        | `A`, `Test`, `Total Amount`, etc  |
+| Number     | Anything that can be parsed as a float by [strconv.ParseFloat](https://pkg.go.dev/strconv#ParseFloat)              | `1`, `2.0`, `1e-6`, etc           |
 | Expression | Always starts with `=`. Excel style math expression that involves numbers and other cells.                         | `=A1+B1`, `=69+420`, `=A1+69` etc |
-| Clone      | Always starts with `:`. Clones a neighbor cell in a particular direction denoted by characters `<`, `>`, `v`, `^`. | `:<`, `:>`, `:v`, `:^`             |
+| Clone      | Always starts with `:`. Clones a neighbor cell in a particular direction denoted by characters `<`, `>`, `v`, `^`. | `:<`, `:>`, `:v`, `:^`            |
 
 ## Idea
 Inspired by [minicel](https://github.com/tsoding/minicel)
