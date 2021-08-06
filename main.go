@@ -30,6 +30,7 @@ const (
 )
 
 var debugFlag = flag.Bool("debug", false, "enable intermediate representation and other debug infos")
+var prettyPrintFlag = flag.Bool("pp", false, "pretty prints the cells with padding in-between")
 var numberFormatVar = flag.String("format", "%.2f", "printf-like formatting for floating point numbers inside cells")
 
 func init() {
@@ -231,13 +232,16 @@ func dumpTable(table [][]Cell) {
 	}
 
 	// Render table
-	// FIXME: Do some sort of pretty printing
 	for _, row := range table {
 		for j, cell := range row {
 			fmt.Print(cell.Content)
 			if j < len(row)-1 {
 				fmt.Print(strings.Repeat(" ", widths[j]-len(cell.Content)))
-				fmt.Print("|")
+				if *prettyPrintFlag {
+					fmt.Print(" | ")
+				} else {
+					fmt.Print("|")
+				}
 			}
 		}
 		fmt.Println()
