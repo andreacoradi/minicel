@@ -41,11 +41,11 @@ func init() {
 
 func main() {
 	if len(flag.Args()) < 1 {
-		log.Fatalln("Not enough arguments")
+		log.Panic("Not enough arguments")
 	}
 	c, err := ioutil.ReadFile(flag.Arg(0))
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	// Calculate size
@@ -133,14 +133,14 @@ func main() {
 						letter := m[0]
 						number, err := strconv.Atoi(m[1:])
 						if err != nil {
-							panic(err)
+							log.Panic(err)
 						}
 
 						if incNumber {
 							number += inc
 						} else {
 							if (letter < 'A' && inc < 0) || (letter > 'Z' && inc > 0) {
-								panic("Out of bounds")
+								log.Panic("Out of bounds")
 							}
 							letter = uint8(int(letter) + inc)
 						}
@@ -165,7 +165,7 @@ func main() {
 			case Expression:
 				expr, err := parser.ParseExpr(cell.Content[1:])
 				if err != nil {
-					panic(err)
+					log.Panic(err)
 				}
 
 				value := parseExpr(table, expr)
@@ -175,7 +175,7 @@ func main() {
 					Type:    Number,
 				}
 			case Clone:
-				log.Fatalln("There should be no Clones after initial evaluation")
+				log.Panic("There should be no Clones after initial evaluation")
 			}
 		}
 	}
@@ -185,9 +185,13 @@ func main() {
 
 func parseExpr(table Table, expr ast.Expr) float64 {
 	if ident, ok := expr.(*ast.Ident); ok {
-		cell := getCell(table, ident)
+		cell, err := getCell(table, ident)
+		if err != nil {
+			log.Panic(err)
+		}
+
 		if cell.Type == Text {
-			panic("Text cell should not be used inside expressions")
+			log.Panic("Text cell should not be used inside expressions")
 		}
 		return parseNumber(cell.Content)
 	}
@@ -212,6 +216,7 @@ func parseExpr(table Table, expr ast.Expr) float64 {
 		return parseNumber(number.Value)
 	}
 
+	log.Panic("couldn't parse expr")
 	return -1
 }
 
@@ -250,25 +255,25 @@ func dumpTable(table Table) {
 	}
 }
 
-func getCell(table Table, ident *ast.Ident) Cell {
+func getCell(table Table, ident *ast.Ident) (Cell, error) {
 	letter := ident.Name[0]
 	number, err := strconv.Atoi(ident.Name[1:])
 	if err != nil {
-		panic(err)
+		return Cell{}, err
 	}
 
 	if (letter-'A') < 0 || number < 0 {
-		panic("Invalid cell identifier '" + ident.Name + "'")
+		return Cell{}, fmt.Errorf("invalid cell identifier %q", ident.Name)
 	}
 
 	cell := table[number][letter-'A']
-	return cell
+	return cell, nil
 }
 
 func parseNumber(s string) float64 {
 	value, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	return value
 }
