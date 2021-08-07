@@ -49,10 +49,14 @@ var charToDir = map[byte]Dir{
 
 var debugFlag = flag.Bool("dbg", false, "enable intermediate representation and other debug infos")
 var prettyPrintFlag = flag.Bool("pp", false, "pretty prints the cells with padding in-between")
+var alignmentVar = flag.String("algn", "left", "set one of three valid alignments for cells (left, center, right)")
 var numberFormatVar = flag.String("fmt", "%.2f", "printf-like formatting for floating point numbers inside cells")
 
 func init() {
 	flag.Parse()
+	if *alignmentVar != "left" && *alignmentVar != "center" && *alignmentVar != "right" {
+		log.Panic("Invalid alignment: ", *alignmentVar)
+	}
 }
 
 func main() {
@@ -248,9 +252,20 @@ func dumpTable(table Table) {
 	// Render table
 	for _, row := range table {
 		for j, cell := range row {
+			fillSpace := widths[j] - len(cell.Content)
+			if *alignmentVar == "center" {
+				fmt.Print(strings.Repeat(" ", fillSpace/2))
+			} else if *alignmentVar == "right" {
+				fmt.Print(strings.Repeat(" ", fillSpace))
+			}
+
 			fmt.Print(cell.Content)
 			if j < len(row)-1 {
-				fmt.Print(strings.Repeat(" ", widths[j]-len(cell.Content)))
+				if *alignmentVar == "left" {
+					fmt.Print(strings.Repeat(" ", fillSpace))
+				} else if *alignmentVar == "center" {
+					fmt.Print(strings.Repeat(" ", fillSpace-fillSpace/2))
+				}
 
 				if *prettyPrintFlag {
 					fmt.Print(" | ")
